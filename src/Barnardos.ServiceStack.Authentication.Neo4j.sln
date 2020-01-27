@@ -1,0 +1,28 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ServiceStack.Authentication.Neo4j", "ServiceStack.Authentication.Neo4j\ServiceStack.Authentication.Neo4j.csproj", "{89E51510-429F-4D9C-9F76-E5B711FBC1F5}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ServiceStack.Server.Tests", "ServiceStack.Server.Tests\ServiceStack.Server.Tests.csproj", "{BD42E82F-7562-4B5B-BB10-393BD14B5E76}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ServiceStack.Authentication.Neo4j.Signed", "ServiceStack.Authentication.Neo4j.Signed\ServiceStack.Authentication.Neo4j.Signed.csproj", "{A3326BC9-9D15-44AD-A051-AA64BA322B93}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{89E51510-429F-4D9C-9F76-E5B711FBC1F5}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{89E51510-429F-4D9C-9F76-E5B711FBC1F5}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{89E51510-429F-4D9C-9F76-E5B711FBC1F5}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{89E51510-429F-4D9C-9F76-E5B711FBC1F5}.Release|Any CPU.Build.0 = Release|Any CPU
+		{BD42E82F-7562-4B5B-BB10-393BD14B5E76}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{BD42E82F-7562-4B5B-BB10-393BD14B5E76}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{BD42E82F-7562-4B5B-BB10-393BD14B5E76}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{BD42E82F-7562-4B5B-BB10-393BD14B5E76}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A3326BC9-9D15-44AD-A051-AA64BA322B93}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A3326BC9-9D15-44AD-A051-AA64BA322B93}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A3326BC9-9D15-44AD-A051-AA64BA322B93}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A3326BC9-9D15-44AD-A051-AA64BA322B93}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal
