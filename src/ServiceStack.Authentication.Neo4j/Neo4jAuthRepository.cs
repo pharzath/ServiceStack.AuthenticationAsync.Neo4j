@@ -423,7 +423,7 @@ namespace ServiceStack.Authentication.Neo4j
 
             var userAuthDetails = driver.ReadTxQuery(tx =>
             {
-                var result = tx.Run(Query.UserAuthByProviderAndUserId, parameters);
+                var result = tx.Run(Query.UserAuthDetailsByProviderAndUserId, parameters);
                 return result.Map<TUserAuthDetails>().SingleOrDefault() ?? new TUserAuthDetails
                 {
                     Provider = tokens.Provider,
