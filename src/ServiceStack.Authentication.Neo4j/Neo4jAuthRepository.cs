@@ -17,15 +17,15 @@ namespace ServiceStack.Authentication.Neo4j
         where TUserAuth : class, IUserAuth, new()
         where TUserAuthDetails : class, IUserAuthDetails, new()
     {
-        private static class Label
+        public static class Label
         {
-            public const string AuthIdSeq = nameof(AuthIdSeq);    
-            public static string UserAuth => typeof(UserAuth).Name;
-            public static string UserAuthDetails => typeof(UserAuthDetails).Name;
-            public static string ApiKey => typeof(ApiKey).Name;
+            public const string AuthIdSeq = "AuthIdSeq";    
+            public const string UserAuth = "UserAuth";
+            public const string UserAuthDetails = "UserAuthDetails";
+            public const string ApiKey = "ApiKey";
         }
 
-        private static class Rel
+        public static class Rel
         {
             public const string HasUserAuthDetails = "HAS_USER_AUTH_DETAILS";
             public const string HasApiKey = "HAS_API_KEY";
