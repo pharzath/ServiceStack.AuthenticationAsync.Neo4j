@@ -196,14 +196,15 @@ namespace ServiceStack.Server.Tests.AuthRepo
         {
             // Arrange
             var userAuth = Sut.CreateUserAuth(NewUserAuth, Password);
-            CreateUserAuthDetails(userAuth, "google");
+            var userAuthDetails = CreateUserAuthDetails(userAuth, "google");
 
             var authSession = new AuthUserSession();
 
             var tokens = new AuthTokens
             {
                 UserId = userAuth.Id.ToString(),
-                Provider = "google"
+                Provider = "google",
+                City = userAuthDetails.City
             };
             
             // Act
@@ -213,6 +214,7 @@ namespace ServiceStack.Server.Tests.AuthRepo
             result.Id.Should().BeGreaterThan(0);
             result.Id.Should().Be(result.UserAuthId);
             result.ModifiedDate.Should().BeAfter(userAuth.ModifiedDate);
+            result.City.Should().Be(userAuthDetails.City);
         }
 
         [Test]
