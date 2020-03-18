@@ -2,7 +2,7 @@
 
     <PropertyGroup>
         <TargetFramework>netstandard2.0</TargetFramework>
-        <Version>1.0.0</Version>
+        <Version>1.0.1</Version>
         <Title>A Neo4j IUserAuthRepository to persist User registration and auth info in a Neo4j Graph DB</Title>
         <Authors>Neil Dobson</Authors>
         <Company>Barnardos Australia</Company>
