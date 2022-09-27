@@ -2,7 +2,7 @@ using Neo4j.Driver;
 using ServiceStack;
 using ServiceStack.Auth;
 
-namespace Neo4jAuthRepositoryAsync;
+namespace Neo4jAuthRepository;
 
     // ReSharper disable once InconsistentNaming
     public class Neo4jAuthRepositoryAsync : Neo4jAuthRepositoryAsync<UserAuth, UserAuthDetails>
