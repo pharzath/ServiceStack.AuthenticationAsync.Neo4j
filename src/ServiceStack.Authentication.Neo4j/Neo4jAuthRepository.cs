@@ -1,23 +1,26 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using Neo4j.Driver;
+using ServiceStack;
 using ServiceStack.Auth;
 
-namespace ServiceStack.Authentication.Neo4j
-{
+namespace Neo4jAuthRepositoryAsync;
+
     // ReSharper disable once InconsistentNaming
-    public class Neo4jAuthRepository : Neo4jAuthRepository<UserAuth, UserAuthDetails>
+    public class Neo4jAuthRepositoryAsync : Neo4jAuthRepositoryAsync<UserAuth, UserAuthDetails>
     {
-        public Neo4jAuthRepository(IDriver driver) : base(driver) { }
+        public Neo4jAuthRepositoryAsync(IDriver driver) 
+            : base(driver) { }
     }
     
     // ReSharper disable once InconsistentNaming
-    public class Neo4jAuthRepository<TUserAuth, TUserAuthDetails> : IUserAuthRepository, IClearable, IRequiresSchema, IManageApiKeys
+    public class Neo4jAuthRepositoryAsync<TUserAuth, TUserAuthDetails> : 
+        IUserAuthRepositoryAsync, 
+        IClearableAsync, 
+        IRequiresSchemaAsync, 
+        IManageApiKeysAsync
         where TUserAuth : class, IUserAuth, new()
         where TUserAuthDetails : class, IUserAuthDetails, new()
     {
-        public static class Label
+        private static class Label
         {
             public const string AuthIdSeq = "AuthIdSeq";    
             public const string UserAuth = "UserAuth";
@@ -25,7 +28,7 @@ namespace ServiceStack.Authentication.Neo4j
             public const string ApiKey = "ApiKey";
         }
 
-        public static class Rel
+        private static class Rel
         {
             public const string HasUserAuthDetails = "HAS_USER_AUTH_DETAILS";
             public const string HasApiKey = "HAS_API_KEY";
@@ -122,104 +125,105 @@ namespace ServiceStack.Authentication.Neo4j
                 MERGE (userAuth)-[:{Rel.HasApiKey}]->(apiKey)";
         }
 
-        private readonly IDriver driver;
+        private readonly IDriver _driver;
         
-        public Neo4jAuthRepository(IDriver driver)
+        // ReSharper disable once MemberCanBeProtected.Global
+        public Neo4jAuthRepositoryAsync(IDriver driver)
         {
-            this.driver = driver;
+            this._driver = driver;
 
             InitMappers();
         }
 
-        public void InitSchema()
+        public async Task InitSchemaAsync(CancellationToken token=default)
         {
-            driver.WriteTxQuery(tx =>
+            await _driver.WriteTxQueryAsync(async tx =>
             {
-                tx.Run(Query.IdScopeConstraint);
-                tx.Run(Query.UserAuthConstraint);
-                tx.Run(Query.UserAuthDetailsConstraint);
+                await tx.RunAsync(Query.IdScopeConstraint);
+                await tx.RunAsync(Query.UserAuthConstraint);
+                await tx.RunAsync(Query.UserAuthDetailsConstraint);
             });
         }
 
-        public IUserAuth CreateUserAuth(IUserAuth newUser, string password)
+        public async Task<IUserAuth> CreateUserAuthAsync(IUserAuth newUser, string password , CancellationToken token=default)
         {
             newUser.ValidateNewUser(password);
 
-            AssertNoExistingUser(newUser);
+            await AssertNoExistingUserAsync(newUser);
 
             newUser.PopulatePasswordHashes(password);
             newUser.CreatedDate = DateTime.UtcNow;
             newUser.ModifiedDate = newUser.CreatedDate;
 
-            SaveUser(newUser);
+            await SaveUserAsync(newUser);
             return newUser;
         }
 
-        private void SaveUser(IUserAuth userAuth)
+        private Task SaveUserAsync(IUserAuth userAuth)
         {
-            driver.WriteTxQuery(tx =>
+            return _driver.WriteTxQueryAsync(async tx =>
             {
                 if (userAuth.Id == default)
-                    userAuth.Id = NextSequence(tx, Label.UserAuth);
+                    userAuth.Id = await NextSequenceAsync(tx, Label.UserAuth);
 
                 var parameters = new
                 {
                     user = userAuth.ConvertTo<Dictionary<string, object>>()
                 };
 
-                tx.Run(Query.CreateOrUpdateUserAuth, parameters);
+                await tx.RunAsync(Query.CreateOrUpdateUserAuth, parameters);
             });
         }
 
-        private int NextSequence(ITransaction tx, string scope)
+        private async Task<int> NextSequenceAsync(IAsyncTransaction tx, string scope)
         {
             var parameters = new { scope };
 
-            var result = tx.Run(Query.NextSequence, parameters);
+            var result = await tx.RunAsync(Query.NextSequence, parameters);
 
-            var record = result.Single();
+            var record = await result.SingleAsync();
             return record[0].As<int>();
         }
 
-        private void AssertNoExistingUser(IUserAuth newUser, IUserAuth exceptForExistingUser = null)
+        private async Task AssertNoExistingUserAsync(IUserAuth newUser, IUserAuth? exceptForExistingUser = null)
         {
-            IUserAuth existingUser;
+            IUserAuth? existingUser;
             if (newUser.UserName != null)
             {
-                existingUser = GetUserAuthByUserName(newUser.UserName);
+                existingUser = await GetUserAuthByUserNameAsync(newUser.UserName);
                 if (existingUser != null
                     && (exceptForExistingUser == null || existingUser.Id != exceptForExistingUser.Id))
-                    throw new ArgumentException(string.Format(ErrorMessages.UserAlreadyExistsTemplate1, newUser.UserName.SafeInput()));
+                    throw new ArgumentException(string.Format(ErrorMessages.UserAlreadyExistsFmt, newUser.UserName.SafeInput()));
             }
 
             if (newUser.Email == null) return;
             
-            existingUser = GetUserAuthByUserName(newUser.Email);
+            existingUser = await GetUserAuthByUserNameAsync(newUser.Email);
             if (existingUser != null
                 && (exceptForExistingUser == null || existingUser.Id != exceptForExistingUser.Id))
-                throw new ArgumentException(string.Format(ErrorMessages.EmailAlreadyExistsTemplate1, newUser.Email.SafeInput()));
+                throw new ArgumentException(string.Format(ErrorMessages.EmailAlreadyExistsFmt, newUser.Email.SafeInput()));
         }
 
-        public IUserAuth UpdateUserAuth(IUserAuth existingUser, IUserAuth newUser, string password)
+        public async Task<IUserAuth> UpdateUserAuthAsync(IUserAuth existingUser, IUserAuth newUser, string password,CancellationToken token=default)
         {
             newUser.ValidateNewUser(password);
 
-            AssertNoExistingUser(newUser, existingUser);
+            await AssertNoExistingUserAsync(newUser, existingUser);
 
             newUser.Id = existingUser.Id;
             newUser.PopulatePasswordHashes(password, existingUser);
             newUser.CreatedDate = existingUser.CreatedDate;
             newUser.ModifiedDate = DateTime.UtcNow;
-            SaveUser(newUser);
+            await SaveUserAsync(newUser);
 
             return newUser;
         }
 
-        public IUserAuth UpdateUserAuth(IUserAuth existingUser, IUserAuth newUser)
+        public async Task<IUserAuth> UpdateUserAuthAsync(IUserAuth existingUser, IUserAuth newUser,CancellationToken token=default)
         {
             newUser.ValidateNewUser();
 
-            AssertNoExistingUser(newUser);
+            await AssertNoExistingUserAsync(newUser);
 
             newUser.Id = existingUser.Id;
             newUser.PasswordHash = existingUser.PasswordHash;
@@ -227,14 +231,14 @@ namespace ServiceStack.Authentication.Neo4j
             newUser.DigestHa1Hash = existingUser.DigestHa1Hash;
             newUser.CreatedDate = existingUser.CreatedDate;
             newUser.ModifiedDate = DateTime.UtcNow;
-            SaveUser(newUser);
+            await SaveUserAsync(newUser);
 
             return newUser;
         }
 
-        public IUserAuth GetUserAuthByUserName(string userNameOrEmail)
+        public async Task<IUserAuth?> GetUserAuthByUserNameAsync(string userNameOrEmail,CancellationToken token=default)
         {
-            if (userNameOrEmail == null)
+            if (string.IsNullOrEmpty( userNameOrEmail))
                 return null;
 
             var isEmail = userNameOrEmail.Contains("@");
@@ -244,66 +248,64 @@ namespace ServiceStack.Authentication.Neo4j
                 name = userNameOrEmail
             };
 
-            return driver.ReadTxQuery(tx =>
+            return await _driver.ReadTxQueryAsync(async tx =>
             {
-                var result = tx.Run(isEmail ? Query.UserAuthByEmail : Query.UserAuthByName, parameters);
-                return result.Map<TUserAuth>().SingleOrDefault();
+                var result = await tx.RunAsync(isEmail ? Query.UserAuthByEmail : Query.UserAuthByName, parameters);
+                return (await result.Map<IUserAuth>()).SingleOrDefault();
             });
         }
 
-        public bool TryAuthenticate(string userName, string password, out IUserAuth userAuth)
+        public async Task<IUserAuth?> TryAuthenticateAsync(string userName, string password,CancellationToken token=default)
         {
-            userAuth = GetUserAuthByUserName(userName);
-            if (userAuth == null)
-                return false;
+            var userAuth = await GetUserAuthByUserNameAsync(userName, token);
+            if (userAuth is null)
+                return null;
 
             if (userAuth.VerifyPassword(password, out var needsRehash))
             {
-                this.RecordSuccessfulLogin(userAuth, needsRehash, password);
+                await this.RecordSuccessfulLoginAsync(userAuth, needsRehash, password, token: token);
 
-                return true;
+                return userAuth;
             }
 
-            this.RecordInvalidLoginAttempt(userAuth);
-
-            userAuth = null;
-            return false;
+            await this.RecordInvalidLoginAttemptAsync(userAuth, token: token);
+            
+            return null;
         }
 
-        public bool TryAuthenticate(Dictionary<string, string> digestHeaders, string privateKey, int nonceTimeOut, string sequence, out IUserAuth userAuth)
+        public async Task<IUserAuth?> TryAuthenticateAsync(Dictionary<string, string> digestHeaders, string privateKey, int nonceTimeOut, string sequence,CancellationToken token=default )
         {
-            userAuth = GetUserAuthByUserName(digestHeaders["username"]);
+            var userAuth = await GetUserAuthByUserNameAsync(digestHeaders["username"], token);
             if (userAuth == null)
-                return false;
+                return null;
 
             if (userAuth.VerifyDigestAuth(digestHeaders, privateKey, nonceTimeOut, sequence))
             {
-                this.RecordSuccessfulLogin(userAuth);
+                await this.RecordSuccessfulLoginAsync(userAuth, token: token);
 
-                return true;
+                return userAuth;
             }
 
-            this.RecordInvalidLoginAttempt(userAuth);
-
-            userAuth = null;
-            return false;
+            await this.RecordInvalidLoginAttemptAsync(userAuth, token: token);
+            
+            return null;
         }
 
-        public void LoadUserAuth(IAuthSession session, IAuthTokens tokens)
+        public async Task LoadUserAuthAsync(IAuthSession session, IAuthTokens tokens,CancellationToken token=default)
         {
             if (session == null)
                 throw new ArgumentNullException(nameof(session));
 
-            var userAuth = GetUserAuth(session, tokens);
-            LoadUserAuth(session, userAuth);
+            var userAuth = await GetUserAuthAsync(session, tokens, token);
+            await LoadUserAuthAsync(session, userAuth!,token);
         }
 
-        private void LoadUserAuth(IAuthSession session, IUserAuth userAuth)
+        private async Task LoadUserAuthAsync(IAuthSession session, IUserAuth userAuth,CancellationToken token=default)
         {
-            session.PopulateSession(userAuth, this);
+            await session.PopulateSessionAsync(userAuth, this, token: token);
         }
 
-        public IUserAuth GetUserAuth(string userAuthId)
+        public async Task<IUserAuth?> GetUserAuthAsync(string userAuthId,CancellationToken token=default)
         {
             TryConvertToInteger(userAuthId, "userAuthId", out var idVal);
 
@@ -312,17 +314,17 @@ namespace ServiceStack.Authentication.Neo4j
                 id = idVal
             };
 
-            return driver.ReadTxQuery(tx =>
+            return await _driver.ReadTxQueryAsync(async tx =>
             {
-                var result = tx.Run(Query.UserAuthById, parameters);
-                return result.Map<TUserAuth>().SingleOrDefault();
+                var result = await tx.RunAsync(Query.UserAuthById, parameters);
+                return (await result.Map<TUserAuth>()).SingleOrDefault();
             });
         }
 
-        public void SaveUserAuth(IAuthSession authSession)
+        public async Task SaveUserAuthAsync(IAuthSession authSession,CancellationToken token=default)
         {
             var userAuth = !authSession.UserAuthId.IsNullOrEmpty()
-                ? (TUserAuth)GetUserAuth(authSession.UserAuthId)
+                ? (TUserAuth)(await GetUserAuthAsync(authSession.UserAuthId, token))!
                 : authSession.ConvertTo<TUserAuth>();
 
             if (userAuth.Id == default && !authSession.UserAuthId.IsNullOrEmpty())
@@ -336,7 +338,7 @@ namespace ServiceStack.Authentication.Neo4j
             if (userAuth.CreatedDate == default)
                 userAuth.CreatedDate = userAuth.ModifiedDate;
 
-            SaveUser(userAuth);
+            await SaveUserAsync(userAuth);
 
             if (authSession.UserAuthId.IsNullOrEmpty())
             {
@@ -344,16 +346,16 @@ namespace ServiceStack.Authentication.Neo4j
             }
         }
 
-        public void SaveUserAuth(IUserAuth userAuth)
+        public async Task SaveUserAuthAsync(IUserAuth userAuth,CancellationToken token=default)
         {
             userAuth.ModifiedDate = DateTime.UtcNow;
             if (userAuth.CreatedDate == default)
                 userAuth.CreatedDate = userAuth.ModifiedDate;
 
-            SaveUser(userAuth);
+            await SaveUserAsync(userAuth);
         }
 
-        public void DeleteUserAuth(string userAuthId)
+        public async Task DeleteUserAuthAsync(string userAuthId,CancellationToken token=default)
         {
             TryConvertToInteger(userAuthId, "userAuthId", out var idVal);
 
@@ -362,10 +364,10 @@ namespace ServiceStack.Authentication.Neo4j
                 id = idVal
             };
 
-            driver.WriteQuery(Query.DeleteUserAuth, parameters);
+            await _driver.WriteQueryAsync(Query.DeleteUserAuth, parameters);
         }
 
-        public List<IUserAuthDetails> GetUserAuthDetails(string userAuthId)
+        public async Task<List<IUserAuthDetails>> GetUserAuthDetailsAsync(string userAuthId,CancellationToken token=default)
         {
             TryConvertToInteger(userAuthId, "userAuthId", out var idVal);
 
@@ -374,26 +376,28 @@ namespace ServiceStack.Authentication.Neo4j
                 id = idVal
             };
 
-            var items = driver.ReadTxQuery(tx =>
+            var items = await _driver.ReadTxQueryAsync(async tx =>
             {
-                var results = tx.Run(Query.UserAuthDetailsById, parameters);
-                return results.Map<TUserAuthDetails>().ToList();
+                var results = await tx.RunAsync(Query.UserAuthDetailsById, parameters);
+                await results.FetchAsync();
+                
+                return await results.Map<TUserAuthDetails>();
             });
 
             return items.Cast<IUserAuthDetails>().ToList();
         }
 
-        public IUserAuth GetUserAuth(IAuthSession authSession, IAuthTokens tokens)
+        public async Task<IUserAuth?> GetUserAuthAsync(IAuthSession authSession, IAuthTokens? tokens,CancellationToken token=default)
         {
-            IUserAuth userAuth;
+            IUserAuth? userAuth;
             if (!authSession.UserAuthId.IsNullOrEmpty())
             {
-                userAuth = GetUserAuth(authSession.UserAuthId);
+                userAuth = await GetUserAuthAsync(authSession.UserAuthId, token);
                 if (userAuth != null) return userAuth;
             }
             if (!authSession.UserAuthName.IsNullOrEmpty())
             {
-                userAuth = GetUserAuthByUserName(authSession.UserAuthName);
+                userAuth = await GetUserAuthByUserNameAsync(authSession.UserAuthName, token);
                 if (userAuth != null) return userAuth;
             }
 
@@ -406,14 +410,14 @@ namespace ServiceStack.Authentication.Neo4j
                 provider = tokens.Provider
             };
 
-            return driver.ReadTxQuery(tx =>
+            return await _driver.ReadTxQueryAsync(async tx =>
             {
-                var result = tx.Run(Query.UserAuthByProviderAndUserId, parameters);
-                return result.Map<TUserAuth>().SingleOrDefault();
+                var result = await tx.RunAsync(Query.UserAuthByProviderAndUserId, parameters);
+                return (await result.Map<TUserAuth>()).SingleOrDefault();
             });
         }
 
-        public IUserAuthDetails CreateOrMergeAuthSession(IAuthSession authSession, IAuthTokens tokens)
+        public async Task<IUserAuthDetails> CreateOrMergeAuthSessionAsync(IAuthSession authSession, IAuthTokens tokens,CancellationToken token=default)
         {
             var parameters = new
             {
@@ -421,10 +425,10 @@ namespace ServiceStack.Authentication.Neo4j
                 provider = tokens.Provider
             };
 
-            var userAuthDetails = driver.ReadTxQuery(tx =>
+            var userAuthDetails = await  _driver.ReadTxQueryAsync(async tx =>
             {
-                var result = tx.Run(Query.UserAuthDetailsByProviderAndUserId, parameters);
-                return result.Map<TUserAuthDetails>().SingleOrDefault() ?? new TUserAuthDetails
+                var result = await tx.RunAsync(Query.UserAuthDetailsByProviderAndUserId, parameters);
+                return (await  result.Map<TUserAuthDetails>()).SingleOrDefault() ?? new TUserAuthDetails
                 {
                     Provider = tokens.Provider,
                     UserId = tokens.UserId,
@@ -433,14 +437,14 @@ namespace ServiceStack.Authentication.Neo4j
 
             userAuthDetails.PopulateMissing(tokens);
             
-            var userAuth = GetUserAuth(authSession, tokens) ?? new TUserAuth();
+            var userAuth = await GetUserAuthAsync(authSession, tokens, token) ?? new TUserAuth();
             userAuth.PopulateMissingExtended(userAuthDetails);
 
             userAuth.ModifiedDate = DateTime.UtcNow;
             if (userAuth.CreatedDate == default)
                 userAuth.CreatedDate = userAuth.ModifiedDate;
 
-            SaveUser((TUserAuth)userAuth);
+            await SaveUserAsync((TUserAuth)userAuth);
 
             userAuthDetails.UserAuthId = userAuth.Id;
             
@@ -448,10 +452,10 @@ namespace ServiceStack.Authentication.Neo4j
                 userAuthDetails.CreatedDate = userAuth.ModifiedDate;
             userAuthDetails.ModifiedDate = userAuth.ModifiedDate;
 
-            driver.WriteTxQuery(tx =>
+            await _driver.WriteTxQueryAsync(async tx =>
             {
                 if (userAuthDetails.Id == default)
-                    userAuthDetails.Id = NextSequence(tx, Label.UserAuthDetails);
+                    userAuthDetails.Id = await NextSequenceAsync(tx, Label.UserAuthDetails);
 
                 var detailsParameters = new
                 {
@@ -459,35 +463,35 @@ namespace ServiceStack.Authentication.Neo4j
                     id = userAuth.Id
                 };
 
-                tx.Run(Query.CreateOrUpdateUserAuthDetails, detailsParameters);
+                await tx.RunAsync(Query.CreateOrUpdateUserAuthDetails, detailsParameters);
             });
 
             return userAuthDetails;
         }
 
-        public void Clear()
+        public async Task ClearAsync(CancellationToken token=default)
         {
-            driver.WriteTxQuery(tx =>
+            await _driver.WriteTxQueryAsync(async tx =>
             {
-                tx.Run(Query.DeleteAllUserAuth);
-                tx.Run(Query.DeleteAllSequence);
+                await tx.RunAsync(Query.DeleteAllUserAuth);
+                await tx.RunAsync(Query.DeleteAllSequence);
             });
         }
 
-        public void InitApiKeySchema()
+        public async void InitApiKeySchema()
         {
-            driver.WriteQuery(Query.ApiKeyConstraint);
+            await _driver.WriteQueryAsync(Query.ApiKeyConstraint);
         }
 
-        public bool ApiKeyExists(string apiKey)
+        public async Task<bool> ApiKeyExistsAsync(string apiKey,CancellationToken token=default)
         {
             if (string.IsNullOrEmpty(apiKey))
                 return false;
 
-            return GetApiKey(apiKey) != null;
+            return (await GetApiKeyAsync(apiKey, token)) != null;
         }
 
-        public ApiKey GetApiKey(string apiKey)
+        public async Task<ApiKey?> GetApiKeyAsync(string apiKey,CancellationToken token=default)
         {
             if (string.IsNullOrEmpty(apiKey))
                 return null;
@@ -497,14 +501,14 @@ namespace ServiceStack.Authentication.Neo4j
                 id = apiKey
             };
 
-            return driver.ReadTxQuery(tx =>
+            return await _driver.ReadTxQueryAsync(async tx =>
             {
-                var result = tx.Run(Query.ApiKeyById, parameters);
-                return result.Map<ApiKey>().SingleOrDefault();
+                var result = await tx.RunAsync(Query.ApiKeyById, parameters);
+                return (await result.Map<ApiKey>()).SingleOrDefault();
             });
         }
 
-        public List<ApiKey> GetUserApiKeys(string userId)
+        public Task<List<ApiKey>> GetUserApiKeysAsync(string userId,CancellationToken token=default)
         {
             TryConvertToInteger(userId, "userId", out var idVal);
 
@@ -514,21 +518,21 @@ namespace ServiceStack.Authentication.Neo4j
                 expiry = DateTime.UtcNow
             };
 
-            return driver.ReadTxQuery(tx =>
+            return _driver.ReadTxQueryAsync(async tx =>
             {
-                var results = tx.Run(Query.ActiveApiKeysByUserAuthId, parameters);
-                return results.Map<ApiKey>().ToList();
+                var results = await tx.RunAsync(Query.ActiveApiKeysByUserAuthId, parameters);
+                return (await results.Map<ApiKey>()).ToList();
             });
         }
 
-        public void StoreAll(IEnumerable<ApiKey> apiKeys)
+        public async Task StoreAllAsync(IEnumerable<ApiKey> apiKeys,CancellationToken token=default)
         {
             var parameters = new
             {
                 keys = apiKeys.Select(p => p.ToObjectDictionary())
             };
 
-            driver.WriteQuery(Query.UpdateApiKeys, parameters);
+            await _driver.WriteQueryAsync(Query.UpdateApiKeys, parameters);
         }
         
         private static void InitMappers()
@@ -554,7 +558,7 @@ namespace ServiceStack.Authentication.Neo4j
             });
         }
         
-        private static void TryConvertToInteger(string strValue, string varName, out int result)
+        private static void TryConvertToInteger(string strValue, string? varName, out int result)
         {
             if (!int.TryParse(strValue, out result))
                 throw new ArgumentException(@"Cannot convert to integer", varName ?? "string");
@@ -563,44 +567,39 @@ namespace ServiceStack.Authentication.Neo4j
 
     internal static class DriverExtensions
     {
-        public static T ReadTxQuery<T>(this IDriver driver, Func<ITransaction, T> txFn)
+        public static async Task<T> ReadTxQueryAsync<T>(this IDriver driver, Func<IAsyncTransaction, Task<T>> txFn)
         {
-            using (var session = driver.Session())
-            {
-                var tx = session.BeginTransaction();
-                var result = txFn(tx);
-                tx.Commit();
-                return result;
-            }
+            await using var session = driver.AsyncSession();
+            var tx = await session.BeginTransactionAsync();
+            var result = await txFn(tx);
+            await tx.CommitAsync();
+            return result;
         }
 
-        public static IResult WriteQuery(this IDriver driver, string statement, object parameters = null)
+        public static async Task<IResultCursor> WriteQueryAsync(this IDriver driver, string statement, object? parameters = null)
         {
-            using (var session = driver.Session())
-            {
-                return session.WriteTransaction(tx => tx.Run(statement, parameters));
-            }
+            await using var session = driver.AsyncSession();
+            return await session.ExecuteWriteAsync( tx => tx.RunAsync(statement, parameters));
         }
         
-        public static void WriteTxQuery(this IDriver driver, Action<ITransaction> txFn)
+        public static async Task WriteTxQueryAsync(this IDriver driver, Func<IAsyncTransaction,Task> txFn)
         {
-            using (var session = driver.Session())
-            {
-                var tx = session.BeginTransaction();
-                txFn(tx);
-                tx.Commit();
-            }
+            await using var session = driver.AsyncSession();
+            var tx = await session.BeginTransactionAsync();
+            await txFn(tx);
+            await tx.CommitAsync();
         }
     }
     
     internal static class RecordExtensions
     {
-        public static IEnumerable<TReturn> Map<TReturn>(
-            this IResult records)
+        public static async Task<IEnumerable<TReturn>> Map<TReturn>(
+            this IResultCursor records)
         {
-            if (records.Peek() == null) return new List<TReturn>();
             
-            return records.Select(record => record.Map<TReturn>());
+            if (records.PeekAsync() == null) return new List<TReturn>();
+            var listAsync = await records.ToListAsync();
+            return listAsync.Select(record => record.Map<TReturn>());
         }
 
         public static TReturn Map<TReturn>(this IRecord record)
@@ -608,4 +607,3 @@ namespace ServiceStack.Authentication.Neo4j
             return ((IEntity) record[0]).Properties.FromObjectDictionary<TReturn>();
         }
     }
-}
